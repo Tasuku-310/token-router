@@ -1,0 +1,34 @@
+{
+  "name": "token-router",
+  "version": "0.3.5",
+  "description": "依頼の重さに応じて、主会話のモデルと effort を自動で切り替えるルーター(Haiku が4項目を採点し、コードが重さを決める。判定できなければ Opus/high)",
+  "author": {
+    "name": "Tasuku-310"
+  },
+  "userConfig": {
+    "dataDir": {
+      "type": "string",
+      "title": "記録の保存先",
+      "description": "判定の記録を書くフォルダの絶対パス。空なら Claude の設定フォルダの中の token-router。フォルダがなければ記録しない",
+      "default": ""
+    },
+    "judgeModel": {
+      "type": "string",
+      "title": "判定に使うモデル",
+      "description": "判定に使うモデルの完全な ID",
+      "default": "claude-haiku-5-5"
+    },
+    "judgePrompt": {
+      "type": "string",
+      "title": "判定の指示の迷い方(P1 または P2)",
+      "description": "判定の指示の版。P1 が既定で、迷ったら高い点を付ける。P2 は試験用",
+      "default": "P1"
+    },
+    "judgeThreshold": {
+      "type": "string",
+      "title": "点数から重さへのしきい値(S1〜S4)",
+      "description": "点数から重さを決める基準。S2 が既定。S1 は重く、S3、S4 は軽く判定する",
+      "default": "S2"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+# 公開するものだけを許可する形にしている。新しいファイルは、ここに足すまでリモートへ送られない。
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/.claude-plugin/
+/.claude-plugin/*
+!/.claude-plugin/marketplace.json
+
+# ルーター本体(型定義は Claude Code が自動で生成する)
+!/plugins/
+/plugins/*
+!/plugins/token-router/
+/plugins/token-router/*
+!/plugins/token-router/tsconfig.json
+!/plugins/token-router/.claude-plugin/
+/plugins/token-router/.claude-plugin/*
+!/plugins/token-router/.claude-plugin/plugin.json
+!/plugins/token-router/hooks/
+/plugins/token-router/hooks/*
+!/plugins/token-router/hooks/hooks.json
+!/plugins/token-router/hooks/judge.js
+!/plugins/token-router/hooks/register.js
+!/plugins/token-router/hooks/router.js
+
+# 確認と集計の道具
+!/scripts/
+/scripts/*
+!/scripts/statusline-token.sh
+!/scripts/audit-routes.sh
+!/scripts/judge-stats.sh
+!/scripts/check-classify.mjs
+!/scripts/bench-judge/
+/scripts/bench-judge/*
+!/scripts/bench-judge/sync.sh
+!/scripts/bench-judge/.claude-plugin/
+/scripts/bench-judge/.claude-plugin/*
+!/scripts/bench-judge/.claude-plugin/plugin.json
+!/scripts/bench-judge/hooks/
+/scripts/bench-judge/hooks/*
+!/scripts/bench-judge/hooks/hooks.json
+!/scripts/bench-judge/hooks/judge.js
+!/scripts/bench-judge/hooks/register.js
+!/scripts/bench-judge/hooks/router.js
+
+# 利用者向けの案内だけを公開する(docs/team、docs/research は手元だけ)
+!/docs/
+/docs/*
+!/docs/guide/
+/docs/guide/*
+!/docs/guide/token-status-guide.md
+!/docs/guide/rollback-guide.md

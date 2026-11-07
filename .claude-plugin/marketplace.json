@@ -1,0 +1,12 @@
+{
+  "name": "token-optimization",
+  "description": "token-router を配布するマーケットプレイス",
+  "owner": { "name": "Tasuku-310" },
+  "plugins": [
+    {
+      "name": "token-router",
+      "source": "./plugins/token-router",
+      "description": "依頼の重さに応じて、主会話のモデルと effort を自動で切り替えるルーター"
+    }
+  ]
+}

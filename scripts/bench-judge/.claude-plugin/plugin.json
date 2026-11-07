@@ -1,0 +1,23 @@
+{
+  "name": "bench-judge",
+  "version": "0.1.0",
+  "description": "token-router の判定だけを安く試す試験用 plugin(導入しない。--plugin-dir でだけ使う)。主会話は呼ばない",
+  "author": { "name": "token-optimization" },
+  "userConfig": {
+    "requestsFile": {
+      "type": "string",
+      "title": "依頼一覧(jsonl)",
+      "description": "スクラッチ領域の絶対パス。1行1件: {\"id\":\"T01\",\"text\":\"...\",\"tail\":\"前回の回答の末尾(任意)\",\"prev\":直前の行の番号(任意),\"unknown\":true(直前が読めない場合)}",
+      "default": ""
+    },
+    "outFile": {
+      "type": "string",
+      "title": "結果の出力先(jsonl)",
+      "description": "絶対パス。依頼の ID、点数、kind、followup、所要時間、消費、失敗の理由だけを書く。依頼文とモデルの答えの文章は書かない",
+      "default": ""
+    },
+    "variant": { "type": "string", "title": "判定の指示(P1、P2、または P1,P2)", "description": "03-design.md 6.1.3。P1,P2 は続けて両方を流す", "default": "P1" },
+    "model": { "type": "string", "title": "判定のモデル", "description": "完全なモデル ID", "default": "claude-haiku-5-5" },
+    "runs": { "type": "string", "title": "1件あたりの回数", "description": "揺れの確認では 3", "default": "1" }
+  }
+}

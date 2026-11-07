@@ -1,0 +1,1 @@
+{ "description": "bench-judge: 判定だけを試す(主会話を呼ばない)", "modules": ["./register.js"] }
