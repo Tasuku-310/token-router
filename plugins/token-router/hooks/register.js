@@ -1,11 +1,11 @@
-// token-router: 依頼の重さで主会話の model / effort を切り替える(配線)。
-// 判定: 明示の指定と危険な操作は規則、残りは Haiku が4項目を採点し、コードが重さを決める(設計 6.1)。
-// 失敗したら Opus/high にする(設計 6.5)。ネットワーク・プロセス・環境変数は使わない。
+// token-router: 作業の段に応じて主会話の model / effort を切り替える(配線)。
+// 判定: 明示の指定と危険な操作は規則、残りは Haiku が作業の段と危険度を答え、コードが行を決める(ADR-0007)。
+// 失敗したら Opus/medium にする。ネットワーク・プロセス・環境変数は使わない。
 // モデルの呼び出しは complete の1か所(下の judgeTurn)だけ。
 import {
-  preRule, explicitTag, stripNote, parseJudge, decide, failed, fallbackFor, guard, make, schemeOf, rowTier,
+  preRule, explicitTag, stripNote, parseJudge, decide, failed, fallbackFor, guard, make, rowTier, isUpperRow,
 } from './router.js'
-import { JUDGE_DEFAULTS, buildSystem, buildUserText, callJudge, makeMarker, summarizeAttachments, tailOf } from './judge.js'
+import { JUDGE_DEFAULTS, JUDGE_SYSTEM, buildUserText, callJudge, makeMarker, summarizeAttachments, tailOf } from './judge.js'
 
 const short = (m) => String(m).replace('claude-', '').replace(/-5-5$/, '')
 const REAL_USER = new Set(['composer', 'sdk', 'bridge'])
@@ -40,7 +40,8 @@ function judgeRecord(d, model, ms) {
     j.cacheRead = u.cache_read_input_tokens | 0
     j.cacheWrite = u.cache_creation_input_tokens | 0
   }
-  if (d.axes) j.axes = d.axes
+  if (d.work) j.work = d.work
+  if (Number.isInteger(d.stakes)) j.stakes = d.stakes
   if (d.kind) j.kind = d.kind
   if (typeof d.followup === 'boolean') j.followup = d.followup
   if (d.tier) j.tier = d.tier
@@ -54,8 +55,7 @@ const newState = (options, deps) => ({
   D: { decide, guard, preRule, callJudge, ...Object.fromEntries(Object.entries(deps).filter(([, v]) => typeof v === 'function')) },
   optDir: String(options?.dataDir ?? '').replace(/\/+$/, ''),
   judgeModel: String(options?.judgeModel || JUDGE_DEFAULTS.model),
-  scheme: schemeOf(String(options?.judgeThreshold || 'S2')), // 未設定なら T-15 で選んだ S2。読めない値は schemeOf が安全側の S1 にする
-  system: buildSystem(String(options?.judgePrompt ?? 'P1') === 'P2' ? 'P2' : 'P1'),
+  system: JUDGE_SYSTEM,
   claudeDir: '', // 設定フォルダ。環境変数を使わず、会話記録のパス(.../projects/...)から割り出す
   ccVersion: '',
   line: '',
@@ -71,7 +71,7 @@ function wipe(S) {
   // turnTag: tagTurn のターンの依頼に明示の指定があれば、その語(失敗時に守る) / turnInfo: そのターンの記録用
   S.pending = S.prevRow = S.applied = S.turnId = S.turnTag = S.tagTurn = S.turnInfo = undefined
   S.prevLoaded = false
-  S.contextTokens = 0 // 直近の応答の入力側トークン(8万トークン判定用)
+  S.contextTokens = 0 // 直近の応答の入力側トークン(切替ガード用)
   S.lastDoneAt = 0 // 直近の主会話ターンの終了時刻(ms)
   S.line = ''
   S.actualModel = '' // 直近の主会話ステップの応答モデル(usage.model)
@@ -101,7 +101,7 @@ async function priorOf(S, $, textLen) {
   let tail = ''
   let unreadable = false
   let hasAssistant = false
-  const needTail = S.prevRow === undefined || textLen <= SHORT_REQUEST || rowTier(S.prevRow) === 'heavy'
+  const needTail = S.prevRow === undefined || textLen <= SHORT_REQUEST || isUpperRow(S.prevRow)
   if (needTail) {
     try {
       const msgs = await $.session.messages()
@@ -133,12 +133,12 @@ async function judgeTurn(S, $, p) {
   const ms = Math.max(0, Math.round((await $.clock.now()) - t0))
   const parsed = r.ok ? parseJudge(r.text) : null
   const d = r.ok
-    ? parsed ? S.D.decide(parsed, { prevRow: S.prevRow, prevUnknown, textLen: text.length, flags, scheme: S.scheme }) : failed('format')
+    ? parsed ? S.D.decide(parsed, { prevRow: S.prevRow, prevUnknown, textLen: text.length, flags }) : failed('format')
     : failed(r.why)
   return { ...d, usage: r.usage, ms }
 }
 
-// ターンの最初の step で呼ぶ。例外は出さない(出ても fallbackFor で Opus/high か明示の指定)
+// ターンの最初の step で呼ぶ。例外は出さない(出ても fallbackFor で Opus/medium か明示の指定)
 async function decideTurn(S, $, e) {
   const p = S.pending
   S.pending = undefined
@@ -150,8 +150,8 @@ async function decideTurn(S, $, e) {
   try {
     d = await judgeTurn(S, $, p)
     const idleMin = S.lastDoneAt ? ((await $.clock.now()) - S.lastDoneAt) / 60000 : 0
-    // 明示の指定と、直前の判定の引き継ぎは切替ガードを通さない
-    g = d.explicit || d.source === 'none' ? { model: d.model, effort: d.effort, held: false } : S.D.guard(d, S.applied, { contextTokens: S.contextTokens, idleMin })
+    // 明示の指定は切替ガードを通さない。引数のないコマンドも通すので、温かい会話で読み直しを起こさない
+    g = d.explicit ? { model: d.model, effort: d.effort, held: false } : S.D.guard(d, S.applied, { contextTokens: S.contextTokens, idleMin })
   } catch {
     d = fallbackFor(S.turnTag)
     g = { model: d.model, effort: d.effort, held: false }
@@ -162,7 +162,7 @@ async function decideTurn(S, $, e) {
   S.turnId = e.turnId // 最後に書く
   S.line = d.source === 'failed'
     ? 'ルーター: ' + d.reason + ' → ' + short(g.model) + '/' + g.effort
-    : 'ルーター: 行' + d.row + ' ' + d.label + ' → ' + short(g.model) + '/' + g.effort + '(' + d.reason + (g.held ? '、モデルは据え置き' : '') + ')'
+    : 'ルーター: 行' + d.row + ' ' + d.label + ' → ' + short(g.model) + '/' + g.effort + '(' + d.reason + (g.held ? '、文脈が大きいので ' + short(g.model) + ' のまま' : '') + ')'
 }
 
 // 判定の直後に1行を出す(応答の途中でも、今のモデルが分かるように)。表示の失敗で切り替えを止めない
@@ -246,7 +246,7 @@ export function register(on, options, deps = {}) {
     } catch {}
     return result
   }).catch(async function* ($, e, next) {
-    // フックが例外のまま抜けた、または時間を超えた。next の前なら Opus/high(明示の指定があればそれ)で進む
+    // フックが例外のまま抜けた、または時間を超えた。next の前なら Opus/medium(明示の指定があればそれ)で進む
     if (next.called || e.agentId !== undefined) return yield* next(e)
     if (e.turnId !== S.turnId || !S.applied) {
       const d = fallbackFor(S.pending?.tag ?? (e.turnId === S.tagTurn ? S.turnTag : undefined))
